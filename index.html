@@ -166,6 +166,26 @@
         .repeat-btn:hover {
             background-color: #7b1fa2;
         }
+        .vocab-item input[readonly] {
+            background-color: #f2f2f2;
+            cursor: not-allowed;
+        }
+        .vocab-word-display {
+            flex-grow: 1; /* Allows it to take available space */
+            text-align: left;
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .vocab-word-display.clickable {
+            color: #0066cc;
+            cursor: pointer;
+        }
+        .vocab-word-display.clickable:hover {
+            text-decoration: underline;
+        }
         @media (max-width: 600px) {
             body {
                 margin: 10px;
@@ -186,7 +206,7 @@
 <body>
     <h1>Video YouTube với Phụ đề, TTS và Từ vựng (Hoàn hảo)</h1>
     <div class="container">
-        <input type="text" id="video-url" placeholder="Nhập link YouTube (ví dụ: https://www.youtube.com/watch?v=dQw4w9WgXcQ)">
+        <input type="text" id="video-url" placeholder="Nhập link YouTube (ví dụ: https://www.youtube.com/watch?v=VIDEO_ID)">
         <button onclick="loadVideo()">Tải Video</button>
         <div id="subtitle-link-container" style="display:none;">
             <a id="subtitle-link" target="_blank">Tải phụ đề từ subtitle.to</a>
@@ -238,16 +258,15 @@
     <div id="subtitle-list"></div>
     <h3>Lịch sử xem</h3>
     <div id="history-list"></div>
-    
-<div style="margin-top: 20px;">
+
+<h3>Danh sách từ vựng đã tra</h3>
+<div style="margin-top: 10px; margin-bottom: 10px; text-align: left;">
     <label>
         <input type="checkbox" id="instant-lookup-toggle" checked onchange="toggleInstantLookup(this.checked)">
-        Bật tra từ ngay khi nhấn
+        Bật tra từ điển Naver ngay khi nhấn (Tắt để sửa văn bản)
     </label>
     <button onclick="translateAllVocab()">Dịch tất cả từ vựng bằng Google Dịch</button>
 </div>
-
-<h3>Danh sách từ vựng đã tra</h3>
     <div id="vocab-list"></div>
     <h3>Phụ đề yêu thích</h3>
     <button onclick="clearAllFavorites()">Xóa tất cả phụ đề yêu thích</button>
@@ -454,11 +473,11 @@
                 const startTime = parseInt(timing[0]) * 3600 + parseInt(timing[1]) * 60 + parseFloat(`${timing[2]}.${timing[3] || '0'}`);
                 const koreanText = lines[2].trim();
                 const vietnameseText = lines[3].trim();
-                return { 
-                    startTime: isNaN(startTime) ? 0 : startTime, 
-                    fullText: `${koreanText} ${vietnameseText}`, 
-                    koreanText, 
-                    vietnameseText 
+                return {
+                    startTime: isNaN(startTime) ? 0 : startTime,
+                    fullText: `${koreanText} ${vietnameseText}`,
+                    koreanText,
+                    vietnameseText
                 };
             }).filter(item => item && typeof item.startTime === 'number' && item.koreanText && item.vietnameseText);
         }
@@ -505,8 +524,9 @@
         function toggleInstantLookup(enabled) {
             instantLookupEnabled = enabled;
             localStorage.setItem("instantLookup", enabled ? "1" : "0");
+            displayVocabList(); // Re-render vocab list to apply read-only state
         }
-        
+
         function lookupWord(word) {
             const existing = vocabList.find(item => item.word === word);
             if (!existing) {
@@ -612,7 +632,7 @@
             let subtitleContent = "";
             for (let i = startIndex; i <= endIndex; i++) {
                 const sub = subtitleData[i];
-                const koreanWords = sub.koreanText.split(/\s+/).map(word => 
+                const koreanWords = sub.koreanText.split(/\s+/).map(word =>
                     `<span class="korean-word" onclick="lookupWord('${word}')">${word}</span>`
                 ).join(" ");
                 const isCurrent = i === index ? "current" : "";
@@ -782,11 +802,17 @@
             const vocabListDiv = document.getElementById("vocab-list");
             vocabListDiv.innerHTML = "";
             vocabList.forEach((item, index) => {
+                const readonlyAttr = instantLookupEnabled ? 'readonly' : '';
+                const cursorStyle = instantLookupEnabled ? 'cursor: not-allowed;' : '';
+                const wordDisplayHtml = instantLookupEnabled
+                    ? `<span class="vocab-word-display clickable" onclick="lookupWord('${item.word}')">${item.word}</span>`
+                    : `<input type="text" value="${item.word}" onchange="editVocab(${index}, 'word', this.value)" ${readonlyAttr} style="${cursorStyle}">`;
+
                 const div = document.createElement("div");
                 div.className = "vocab-item";
                 div.innerHTML = `
-                    <input type="text" value="${item.word}" onchange="editVocab(${index}, 'word', this.value)">
-                    <input type="text" value="${item.meaning}" placeholder="Nhập nghĩa..." onchange="editVocab(${index}, 'meaning', this.value)">
+                    ${wordDisplayHtml}
+                    <input type="text" value="${item.meaning}" placeholder="Nhập nghĩa..." onchange="editVocab(${index}, 'meaning', this.value)" ${readonlyAttr} style="${cursorStyle}">
                     <button onclick="deleteVocab(${index})">Xóa</button>
                 `;
                 vocabListDiv.appendChild(div);
@@ -1037,8 +1063,8 @@
         }
 
         function testTTS() {
-            const testText = ttsLanguage === "vi-VN" 
-                ? "Xin chào, đây là kiểm tra giọng đọc tiếng Việt" 
+            const testText = ttsLanguage === "vi-VN"
+                ? "Xin chào, đây là kiểm tra giọng đọc tiếng Việt"
                 : "안녕하세요, 한국어 음성 테스트입니다";
             if (ttsVolume === 0) {
                 alert("Âm lượng TTS đang bằng 0. Vui lòng điều chỉnh thanh trượt âm lượng TTS trước khi thử.");
@@ -1069,13 +1095,19 @@
                 ttsLanguage = savedLanguage;
                 document.getElementById("tts-language").value = ttsLanguage;
             }
+            // Check instant lookup state and update the toggle checkbox
             if (savedInstant !== null) {
                 instantLookupEnabled = savedInstant === "1";
                 document.getElementById("instant-lookup-toggle").checked = instantLookupEnabled;
+            } else { // Default to true if not set
+                instantLookupEnabled = true;
+                document.getElementById("instant-lookup-toggle").checked = true;
+                localStorage.setItem("instantLookup", "1");
             }
+
             displayHistory();
             displayFavorites();
-            displayVocabList();
+            displayVocabList(); // Ensure vocab list is displayed with correct read-only state on load
         };
     </script>
 </body>
