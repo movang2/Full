@@ -166,26 +166,6 @@
         .repeat-btn:hover {
             background-color: #7b1fa2;
         }
-        .vocab-item input[readonly] {
-            background-color: #f2f2f2;
-            cursor: not-allowed;
-        }
-        .vocab-word-display {
-            flex-grow: 1; /* Allows it to take available space */
-            text-align: left;
-            padding: 8px;
-            margin: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background-color: #f9f9f9;
-        }
-        .vocab-word-display.clickable {
-            color: #0066cc;
-            cursor: pointer;
-        }
-        .vocab-word-display.clickable:hover {
-            text-decoration: underline;
-        }
         @media (max-width: 600px) {
             body {
                 margin: 10px;
@@ -206,7 +186,7 @@
 <body>
     <h1>Video YouTube với Phụ đề, TTS và Từ vựng (Hoàn hảo)</h1>
     <div class="container">
-        <input type="text" id="video-url" placeholder="Nhập link YouTube (ví dụ: https://www.youtube.com/watch?v=VIDEO_ID)">
+        <input type="text" id="video-url" placeholder="Nhập link YouTube...">
         <button onclick="loadVideo()">Tải Video</button>
         <div id="subtitle-link-container" style="display:none;">
             <a id="subtitle-link" target="_blank">Tải phụ đề từ subtitle.to</a>
@@ -238,6 +218,12 @@
                 <option value="ko-KR">Tiếng Hàn</option>
             </select>
         </div>
+        <div style="margin-top:10px;">
+            <label for="subtitle-offset">Lệch thời gian phụ đề (giây): </label>
+            <input type="number" id="subtitle-offset" value="0" step="0.1" onchange="updateSubtitleOffset(this.value)">
+            <span id="offset-value">0</span>
+            <button onclick="applyOffsetToSubtitles()">Áp dụng lệch vĩnh viễn</button>
+        </div>
         <div class="volume-container">
             <div class="volume-control">
                 <label for="video-volume">Âm lượng Video: </label>
@@ -258,15 +244,7 @@
     <div id="subtitle-list"></div>
     <h3>Lịch sử xem</h3>
     <div id="history-list"></div>
-
-<h3>Danh sách từ vựng đã tra</h3>
-<div style="margin-top: 10px; margin-bottom: 10px; text-align: left;">
-    <label>
-        <input type="checkbox" id="instant-lookup-toggle" checked onchange="toggleInstantLookup(this.checked)">
-        Bật tra từ điển Naver ngay khi nhấn (Tắt để sửa văn bản)
-    </label>
-    <button onclick="translateAllVocab()">Dịch tất cả từ vựng bằng Google Dịch</button>
-</div>
+    <h3>Danh sách từ vựng đã tra</h3>
     <div id="vocab-list"></div>
     <h3>Phụ đề yêu thích</h3>
     <button onclick="clearAllFavorites()">Xóa tất cả phụ đề yêu thích</button>
@@ -282,7 +260,6 @@
         let history = JSON.parse(localStorage.getItem("videoHistory")) || [];
         let currentVideoUrl = "";
         let vocabList = [];
-        let instantLookupEnabled = true;
         let ttsVolume = 1.0;
         let syncInterval;
         let lastSpokenText = "";
@@ -292,12 +269,17 @@
         let isRepeating = false;
         let repeatCount = 0;
         const maxRepeatCount = 3;
+        let subtitleOffset = 0;
+        
+        // Thêm biến để theo dõi trạng thái
+        let lastSyncedTime = 0;
+        let isSyncing = false;
 
         function checkManualSeek() {
             if (!youtubePlayer) return;
             const currentTime = youtubePlayer.getCurrentTime();
             const timeDiff = Math.abs(currentTime - lastCheckedTime);
-            if (timeDiff > 1 && timeDiff < 10) { // If manual seek detected
+            if (timeDiff > 1 && timeDiff < 10) {
                 isManualSeeking = true;
                 handleManualSeek(currentTime);
             }
@@ -361,7 +343,7 @@
             const urlInput = document.getElementById("video-url").value;
             const videoId = extractVideoId(urlInput);
             if (!videoId) {
-                alert("URL không hợp lệ! Vui lòng nhập link dạng https://www.youtube.com/watch?v=VIDEO_ID");
+                alert("URL không hợp lệ! Vui lòng nhập link dạng https://www.youtube.com/watch?v=...");
                 return;
             }
             currentVideoUrl = urlInput;
@@ -377,14 +359,13 @@
             vocabList = historyItem && historyItem.vocabList ? historyItem.vocabList.slice() : [];
             saveToHistory(urlInput, null);
             displayVocabList();
-            instantLookupEnabled = localStorage.getItem("instantLookup") === "1";
-            document.getElementById("instant-lookup-toggle").checked = instantLookupEnabled;
         }
 
         async function loadAutoSubtitles() {
+            // Giả lập gọi API từ subtitle.to
             alert("Đang thử tải phụ đề tự động từ subtitle.to...");
             try {
-                // Giả lập gọi API từ subtitle.to (thay thế bằng API thực nếu có)
+                // Thay thế bằng API thực nếu có
                 const response = await new Promise(resolve => {
                     setTimeout(() => resolve({ text: `1\n00:00:01,000 --> 00:00:03,000\n안녕하세요\nXin chào\n\n2\n00:00:03,001 --> 00:00:05,000\n만나서 반갑습니다\nRất vui được gặp bạn` }), 1000);
                 });
@@ -418,7 +399,8 @@
                     onStateChange: (event) => {
                         if (event.data === YT.PlayerState.PLAYING) {
                             startReading();
-                        } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                        } else if (event.data === YT.PlayerState.PAUSED || 
+                                   event.data === YT.PlayerState.ENDED) {
                             stopReading();
                         }
                     }
@@ -442,6 +424,41 @@
         function updateTTSLanguage(language) {
             ttsLanguage = language;
             localStorage.setItem("ttsLanguage", ttsLanguage);
+        }
+
+        function updateSubtitleOffset(value) {
+            const newOffset = parseFloat(value) || 0;
+            if (Math.abs(newOffset - subtitleOffset) > 0.05) {
+                subtitleOffset = newOffset;
+                document.getElementById("offset-value").textContent = subtitleOffset.toFixed(1);
+                localStorage.setItem("subtitleOffset", subtitleOffset);
+                
+                if (syncInterval) {
+                    clearInterval(syncInterval);
+                    syncInterval = setInterval(syncSubtitles, 300);
+                    syncSubtitles();
+                }
+            }
+        }
+
+        function applyOffsetToSubtitles() {
+            const offset = parseFloat(document.getElementById("subtitle-offset").value) || 0;
+            if (!subtitleData.length) {
+                alert("Chưa có phụ đề để chỉnh thời gian.");
+                return;
+            }
+
+            subtitleData.forEach(sub => {
+                sub.startTime = Math.max(0, sub.startTime + offset);
+            });
+
+            subtitleOffset = 0;
+            document.getElementById("subtitle-offset").value = "0";
+            document.getElementById("offset-value").textContent = "0";
+            localStorage.setItem("subtitleOffset", "0");
+
+            displaySubtitleList();
+            alert(`Đã áp dụng lệch ${offset} giây vĩnh viễn cho toàn bộ phụ đề.`);
         }
 
         function loadSubtitles() {
@@ -473,11 +490,11 @@
                 const startTime = parseInt(timing[0]) * 3600 + parseInt(timing[1]) * 60 + parseFloat(`${timing[2]}.${timing[3] || '0'}`);
                 const koreanText = lines[2].trim();
                 const vietnameseText = lines[3].trim();
-                return {
-                    startTime: isNaN(startTime) ? 0 : startTime,
-                    fullText: `${koreanText} ${vietnameseText}`,
-                    koreanText,
-                    vietnameseText
+                return { 
+                    startTime: isNaN(startTime) ? 0 : startTime, 
+                    fullText: `${koreanText} ${vietnameseText}`, 
+                    koreanText, 
+                    vietnameseText 
                 };
             }).filter(item => item && typeof item.startTime === 'number' && item.koreanText && item.vietnameseText);
         }
@@ -494,51 +511,22 @@
             });
         }
 
-        async function fetchGoogleTranslate(text) {
-            try {
-                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                const translated = data[0].map(x => x[0]).join('');
-                const index = vocabList.findIndex(item => item.word === text);
-                if (index !== -1) {
-                    vocabList[index].meaning = translated;
-                    saveVocabToHistory();
-                    displayVocabList();
-                }
-            } catch (e) {
-                console.error("Lỗi dịch Google:", e);
-            }
-        }
-
-        async function translateAllVocab() {
-            for (let item of vocabList) {
-                if (!item.meaning || item.meaning === "Đang tra cứu...") {
-                    await fetchGoogleTranslate(item.word);
-                    await new Promise(r => setTimeout(r, 500));
-                }
-            }
-            alert("Đã dịch xong tất cả từ vựng!");
-        }
-
-        function toggleInstantLookup(enabled) {
-            instantLookupEnabled = enabled;
-            localStorage.setItem("instantLookup", enabled ? "1" : "0");
-            displayVocabList(); // Re-render vocab list to apply read-only state
-        }
-
         function lookupWord(word) {
-            const existing = vocabList.find(item => item.word === word);
-            if (!existing) {
+            const naverUrl = `https://korean.dict.naver.com/kovidict/#/search?query=${encodeURIComponent(word)}`;
+            window.open(naverUrl, "_blank");
+            if (!vocabList.some(item => item.word === word)) {
                 vocabList.push({ word, meaning: "Đang tra cứu..." });
                 saveVocabToHistory();
                 displayVocabList();
-            }
-
-            if (instantLookupEnabled) {
-                const naverUrl = `https://korean.dict.naver.com/kovidict/#/search?query=${encodeURIComponent(word)}`;
-                window.open(naverUrl, "_blank");
-                fetchGoogleTranslate(word);
+                // Giả lập lấy nghĩa từ Naver
+                setTimeout(() => {
+                    const index = vocabList.findIndex(item => item.word === word);
+                    if (index !== -1) {
+                        vocabList[index].meaning = `Nghĩa của "${word}" (giả lập)`;
+                        saveVocabToHistory();
+                        displayVocabList();
+                    }
+                }, 1000);
             }
         }
 
@@ -554,7 +542,7 @@
                 alert("Vui lòng tải video trước!");
                 return;
             }
-            currentSubtitleIndex = index - 1; // Adjust for immediate sync after seek
+            currentSubtitleIndex = index - 1;
             youtubePlayer.seekTo(subtitleData[index].startTime, true);
             youtubePlayer.playVideo();
             highlightSubtitle(index);
@@ -582,47 +570,65 @@
             if (syncInterval) {
                 clearInterval(syncInterval);
             }
-            syncInterval = setInterval(() => {
-                syncSubtitles();
-            }, 200);
-            syncSubtitles(); // Initial call
+            syncInterval = setInterval(syncSubtitles, 300);
+            syncSubtitles();
         }
 
         function syncSubtitles() {
-            if (!youtubePlayer || youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+            if (!youtubePlayer || isSyncing) return;
+            
+            const playerState = youtubePlayer.getPlayerState();
+            if (playerState !== YT.PlayerState.PLAYING && playerState !== YT.PlayerState.PAUSED) {
                 return;
             }
-            const currentTime = youtubePlayer.getCurrentTime();
-            let nextSubtitle = null;
-            let nextIndex = -1;
-            for (let i = 0; i < subtitleData.length; i++) {
-                if (subtitleData[i].startTime <= currentTime) {
-                    nextSubtitle = subtitleData[i];
-                    nextIndex = i;
-                } else {
-                    break;
+
+            isSyncing = true;
+            try {
+                const currentTime = youtubePlayer.getCurrentTime() + subtitleOffset;
+                
+                if (Math.abs(currentTime - lastSyncedTime) < 0.1 && currentSubtitleIndex >= 0) {
+                    isSyncing = false;
+                    return;
                 }
-            }
-            if (nextSubtitle && nextIndex !== currentSubtitleIndex) {
-                currentSubtitleIndex = nextIndex;
-                updateSubtitleDisplay(currentSubtitleIndex);
-                const textToRead = ttsLanguage === "vi-VN" ? nextSubtitle.vietnameseText : nextSubtitle.koreanText;
-                const currentTimeMs = Date.now();
-                if (textToRead !== lastSpokenText || (currentTimeMs - lastSpokenTime) > 1000) { // Avoid re-reading same text too quickly
-                    speechSynthesis.cancel();
-                    isSpeaking = true;
-                    readText(textToRead, () => {
-                        isSpeaking = false;
-                        if (isRepeating && repeatCount < maxRepeatCount) {
-                            repeatCount++;
-                            youtubePlayer.seekTo(nextSubtitle.startTime, true); // Seek back to start of current subtitle
-                        } else {
-                            repeatCount = 0; // Reset count
-                        }
-                    });
-                    lastSpokenText = textToRead;
-                    lastSpokenTime = currentTimeMs;
+                lastSyncedTime = currentTime;
+
+                let newIndex = -1;
+                for (let i = 0; i < subtitleData.length; i++) {
+                    if (subtitleData[i].startTime <= currentTime) {
+                        newIndex = i;
+                    } else {
+                        break;
+                    }
                 }
+
+                if (newIndex !== currentSubtitleIndex && newIndex >= 0) {
+                    currentSubtitleIndex = newIndex;
+                    updateSubtitleDisplay(newIndex);
+                    
+                    const currentSub = subtitleData[newIndex];
+                    const textToRead = ttsLanguage === "vi-VN" ? currentSub.vietnameseText : currentSub.koreanText;
+                    
+                    const currentTimeMs = Date.now();
+                    if (textToRead !== lastSpokenText || (currentTimeMs - lastSpokenTime) > 1000) {
+                        speechSynthesis.cancel();
+                        isSpeaking = true;
+                        readText(textToRead, () => {
+                            isSpeaking = false;
+                            if (isRepeating && repeatCount < maxRepeatCount) {
+                                repeatCount++;
+                                youtubePlayer.seekTo(currentSub.startTime - subtitleOffset, true);
+                            } else {
+                                repeatCount = 0;
+                            }
+                        });
+                        lastSpokenText = textToRead;
+                        lastSpokenTime = currentTimeMs;
+                    }
+                }
+            } catch (error) {
+                console.error("Lỗi khi đồng bộ phụ đề:", error);
+            } finally {
+                isSyncing = false;
             }
         }
 
@@ -632,7 +638,7 @@
             let subtitleContent = "";
             for (let i = startIndex; i <= endIndex; i++) {
                 const sub = subtitleData[i];
-                const koreanWords = sub.koreanText.split(/\s+/).map(word =>
+                const koreanWords = sub.koreanText.split(/\s+/).map(word => 
                     `<span class="korean-word" onclick="lookupWord('${word}')">${word}</span>`
                 ).join(" ");
                 const isCurrent = i === index ? "current" : "";
@@ -722,7 +728,7 @@
             }
             if (newIndex >= 0) {
                 youtubePlayer.seekTo(rewindTime, true);
-                currentSubtitleIndex = newIndex - 1; // Adjust for immediate sync after seek
+                currentSubtitleIndex = newIndex - 1;
                 updateSubtitleDisplay(newIndex);
                 if (youtubePlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
                     youtubePlayer.playVideo();
@@ -775,9 +781,6 @@
                 }
                 vocabList = item.vocabList ? item.vocabList.slice() : [];
                 displayVocabList();
-                instantLookupEnabled = localStorage.getItem("instantLookup") === "1";
-                document.getElementById("instant-lookup-toggle").checked = instantLookupEnabled;
-
                 if (ttsVolume === 0) {
                     alert("Âm lượng TTS hiện bằng 0. Vui lòng điều chỉnh thanh trượt âm lượng TTS.");
                 }
@@ -802,17 +805,11 @@
             const vocabListDiv = document.getElementById("vocab-list");
             vocabListDiv.innerHTML = "";
             vocabList.forEach((item, index) => {
-                const readonlyAttr = instantLookupEnabled ? 'readonly' : '';
-                const cursorStyle = instantLookupEnabled ? 'cursor: not-allowed;' : '';
-                const wordDisplayHtml = instantLookupEnabled
-                    ? `<span class="vocab-word-display clickable" onclick="lookupWord('${item.word}')">${item.word}</span>`
-                    : `<input type="text" value="${item.word}" onchange="editVocab(${index}, 'word', this.value)" ${readonlyAttr} style="${cursorStyle}">`;
-
                 const div = document.createElement("div");
                 div.className = "vocab-item";
                 div.innerHTML = `
-                    ${wordDisplayHtml}
-                    <input type="text" value="${item.meaning}" placeholder="Nhập nghĩa..." onchange="editVocab(${index}, 'meaning', this.value)" ${readonlyAttr} style="${cursorStyle}">
+                    <input type="text" value="${item.word}" onchange="editVocab(${index}, 'word', this.value)">
+                    <input type="text" value="${item.meaning}" placeholder="Nhập nghĩa..." onchange="editVocab(${index}, 'meaning', this.value)">
                     <button onclick="deleteVocab(${index})">Xóa</button>
                 `;
                 vocabListDiv.appendChild(div);
@@ -898,7 +895,8 @@
                 vocabList: vocabList,
                 videoVolume: parseInt(document.getElementById("video-volume").value),
                 ttsVolume: ttsVolume,
-                favoriteSubtitles: allFavs
+                favoriteSubtitles: allFavs,
+                subtitleOffset: subtitleOffset,
             };
             const jsonString = JSON.stringify(state, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
@@ -965,6 +963,12 @@
                 localStorage.setItem("ttsVolume", ttsVolume);
                 document.getElementById("video-volume").value = state.videoVolume;
                 updateVideoVolume(state.videoVolume);
+                
+                subtitleOffset = state.subtitleOffset || 0;
+                document.getElementById("subtitle-offset").value = subtitleOffset;
+                document.getElementById("offset-value").textContent = subtitleOffset;
+                localStorage.setItem("subtitleOffset", subtitleOffset);
+
                 const existingHistory = JSON.parse(localStorage.getItem("videoHistory")) || [];
                 const mergedHistory = [...existingHistory];
                 state.history.forEach(newItem => {
@@ -972,7 +976,6 @@
                     if (existingIndex === -1) {
                         mergedHistory.push(newItem);
                     } else {
-                        // Merge logic: prefer new content if available, or more vocab
                         if (newItem.srtContent || (newItem.vocabList && newItem.vocabList.length > (mergedHistory[existingIndex].vocabList || []).length)) {
                             mergedHistory[existingIndex] = newItem;
                         }
@@ -983,9 +986,6 @@
                 displayHistory();
                 vocabList = state.vocabList.slice();
                 displayVocabList();
-                instantLookupEnabled = localStorage.getItem("instantLookup") === "1";
-                document.getElementById("instant-lookup-toggle").checked = instantLookupEnabled;
-
                 localStorage.setItem("favoriteSubtitles", JSON.stringify(state.favoriteSubtitles));
                 displayFavorites();
                 if (subtitleData.length > 0 && currentSubtitleIndex >= -1) {
@@ -1063,8 +1063,8 @@
         }
 
         function testTTS() {
-            const testText = ttsLanguage === "vi-VN"
-                ? "Xin chào, đây là kiểm tra giọng đọc tiếng Việt"
+            const testText = ttsLanguage === "vi-VN" 
+                ? "Xin chào, đây là kiểm tra giọng đọc tiếng Việt" 
                 : "안녕하세요, 한국어 음성 테스트입니다";
             if (ttsVolume === 0) {
                 alert("Âm lượng TTS đang bằng 0. Vui lòng điều chỉnh thanh trượt âm lượng TTS trước khi thử.");
@@ -1079,7 +1079,7 @@
             const savedSpeed = localStorage.getItem("ttsSpeed");
             const savedVolume = localStorage.getItem("ttsVolume");
             const savedLanguage = localStorage.getItem("ttsLanguage");
-            const savedInstant = localStorage.getItem("instantLookup");
+            const savedOffset = localStorage.getItem("subtitleOffset");
 
             if (savedSpeed) {
                 ttsSpeed = parseFloat(savedSpeed);
@@ -1095,19 +1095,15 @@
                 ttsLanguage = savedLanguage;
                 document.getElementById("tts-language").value = ttsLanguage;
             }
-            // Check instant lookup state and update the toggle checkbox
-            if (savedInstant !== null) {
-                instantLookupEnabled = savedInstant === "1";
-                document.getElementById("instant-lookup-toggle").checked = instantLookupEnabled;
-            } else { // Default to true if not set
-                instantLookupEnabled = true;
-                document.getElementById("instant-lookup-toggle").checked = true;
-                localStorage.setItem("instantLookup", "1");
+            if (savedOffset !== null) {
+                subtitleOffset = parseFloat(savedOffset);
+                document.getElementById("subtitle-offset").value = subtitleOffset;
+                document.getElementById("offset-value").textContent = subtitleOffset.toFixed(1);
             }
 
             displayHistory();
             displayFavorites();
-            displayVocabList(); // Ensure vocab list is displayed with correct read-only state on load
+            displayVocabList();
         };
     </script>
 </body>
