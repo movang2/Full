@@ -233,31 +233,47 @@
             background-color: #f0f0f0;
             cursor: pointer;
         }
-        .upcoming-vocab-item {
-            padding: 8px;
-            margin: 5px 0;
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            display: flex;
-            justify-content: space-between;
+        /* Kiểu mới cho phần hiển thị từ vựng */
+        .vocab-info-item {
+            padding: 12px;
+            margin: 8px 0;
+            background-color: #fff;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .upcoming-vocab-item-active {
-            background-color: #ffeb95;
-            border-color: #ffc107;
+        .vocab-info-korean {
             font-weight: bold;
+            color: #2196F3;
+            font-size: 1.2em;
         }
-        .upcoming-vocab-korean {
-            font-weight: bold;
-            color: #0066cc;
+        .vocab-info-meaning {
+            color: #FF5722;
+            margin-left: 8px;
+            font-size: 1em;
         }
-        .upcoming-vocab-meaning {
-            color: #cc0000;
-            margin-left: 10px;
+        .vocab-info-time {
+            color: #607D8B;
+            font-size: 0.85em;
+            margin-left: 5px;
         }
-        .upcoming-vocab-time {
-            color: #666;
-            font-size: 0.9em;
-            margin-left: 10px;
+        .vocab-info-notebook {
+            color: #9C27B0;
+            font-style: italic;
+            margin-top: 5px;
+        }
+        #vocab-info-display button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 3px 8px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        #vocab-info-display button:hover {
+            background-color: #388E3C;
         }
     </style>
 </head>
@@ -317,14 +333,19 @@
             </div>
         </div>
         <div style="margin-top: 20px; border: 1px solid #ccc; padding: 10px;">
-            <h3>Cảnh báo từ vựng sắp xuất hiện</h3>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <label for="vocab-warning-time">Hiển thị trước (giây):</label>
-                <input type="number" id="vocab-warning-time" min="1" max="30" value="5" style="width: 60px;">
-                <button onclick="toggleVocabWarning()">Bật/Tắt</button>
-                <button id="auto-pause-button" onclick="toggleAutoPause()">Tạm dừng tự động (Tắt)</button>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Thông tin từ vựng đã chọn</h3>
+                <div>
+                    <label style="cursor: pointer;">
+                        <input type="checkbox" id="vocab-display-mode" onchange="toggleVocabDisplayMode()" style="margin-right: 5px;">
+                        Chỉ hiển thị thông tin (không tra Naver)
+                    </label>
+                    <button onclick="clearVocabDisplay()" style="margin-left: 10px; padding: 3px 8px; background-color: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">Xóa</button>
+                </div>
             </div>
-            <div id="upcoming-vocab-display" style="margin-top: 10px; min-height: 50px; border: 1px dashed #ccc; padding: 10px;"></div>
+            <div id="vocab-info-display" style="margin-top: 10px; min-height: 80px; border: 1px dashed #ccc; padding: 10px; background-color: #f8f9fa;">
+                👉 Nhấp vào từ vựng được tô màu trong phụ đề để xem chi tiết
+            </div>
         </div>
         <div id="translation-progress" style="display: none;">
             <progress id="progress-bar" value="0" max="100"></progress>
@@ -350,13 +371,12 @@
     <textarea id="notebooklm-vocab" rows="10" placeholder="Dán danh sách từ ở đây..."></textarea>
     <button onclick="linkVocabToSubtitles()">Liên kết từ vựng với phụ đề</button>
     <div id="linked-vocab-list"></div>
-<div style="margin-top: 10px;">
-    <button id="vocab-tts-toggle" onclick="toggleVocabTTSMode()">Chế độ đọc từ vựng (Tắt)</button>
-    <button id="start-vocab-tts" onclick="startVocabTTS()" disabled>Bắt đầu đọc từ vựng</button>
-    <button id="pause-vocab-tts" onclick="pauseVocabTTS()" disabled>Tạm dừng</button>
-    <button id="stop-vocab-tts" onclick="stopVocabTTS()" disabled>Dừng hẳn</button>
-</div>
-
+    <div style="margin-top: 10px;">
+        <button id="vocab-tts-toggle" onclick="toggleVocabTTSMode()">Chế độ đọc từ vựng (Tắt)</button>
+        <button id="start-vocab-tts" onclick="startVocabTTS()" disabled>Bắt đầu đọc từ vựng</button>
+        <button id="pause-vocab-tts" onclick="pauseVocabTTS()" disabled>Tạm dừng</button>
+        <button id="stop-vocab-tts" onclick="stopVocabTTS()" disabled>Dừng hẳn</button>
+    </div>
     <div style="margin-bottom: 10px;">
         <label>
             <input type="checkbox" id="naver-lookup-toggle" onchange="toggleNaverLookup(this.checked)">
@@ -391,11 +411,12 @@
         const maxRepeatCount = 3;
         let subtitleOffset = 0;
         let currentVideoFavorites = [];
-        let vocabWarningEnabled = false;
-        let vocabWarningTime = 5;
-        let upcomingVocabCheckInterval;
-        let autoPauseEnabled = false;
-        let lastUpcomingVocab = [];
+        let vocabTTSMode = false;
+        let vocabTTSIndex = -1;
+        let vocabTTSTimeout;
+        let isVocabTTSPaused = false;
+        let pausedVocabIndex = -1;
+        let vocabDisplayMode = false;
 
         function findBestSubtitleIndex(vocabWord) {
             const cleanVocab = vocabWord.replace(/[^\p{Script=Hangul}]+/gu, "").trim().substring(0, 2);
@@ -440,9 +461,9 @@
                         youtubePlayer.seekTo(subtitleData[matchIndex].startTime, true);
                         youtubePlayer.playVideo();
                         highlightSubtitle(matchIndex);
-        if (vocabTTSMode) {
-            readTextDual(`${word.korean} - ${word.meaning}`);
-        }
+                        if (vocabTTSMode) {
+                            readTextDual(`${word.korean} - ${word.meaning}`);
+                        }
                     } else {
                         alert("Không tìm thấy từ gần giống trong phụ đề");
                     }
@@ -814,6 +835,10 @@
                     saveVocabToHistory();
                     displayVocabList();
                     updateSubtitleDisplay(currentSubtitleIndex);
+                } else {
+                    vocabList.push({ word: text, meaning: translated });
+                    saveVocabToHistory();
+                    displayVocabList();
                 }
             } catch (e) {
                 console.error("Lỗi dịch Google:", e);
@@ -824,7 +849,7 @@
             for (let item of vocabList) {
                 if (!item.meaning || item.meaning === "Đang tra cứu...") {
                     await fetchGoogleTranslate(item.word);
-                    await new Promise(r => setTimeout(r, 00));
+                    await new Promise(r => setTimeout(r, 200));
                 }
             }
             alert("Đã dịch xong tất cả từ vựng!");
@@ -834,20 +859,121 @@
             instantLookupEnabled = enabled;
             localStorage.setItem("instantLookup", enabled ? "1" : "0");
         }
-        
-        function lookupWord(word) {
+
+        /* ===== PHẦN MỚI CHO HIỂN THỊ TỪ VỰNG ===== */
+        function toggleVocabDisplayMode() {
+            vocabDisplayMode = !vocabDisplayMode;
+            document.getElementById("vocab-display-mode").checked = vocabDisplayMode;
+            localStorage.setItem("vocabDisplayMode", vocabDisplayMode);
+            alert(`Chế độ hiển thị: ${vocabDisplayMode ? "CHỈ hiển thị thông tin" : "TRA TỪ trên Naver khi nhấp"}`);
+        }
+
+        function clearVocabDisplay() {
+            document.getElementById("vocab-info-display").innerHTML = "👉 Nhấp vào từ vựng được tô màu trong phụ đề để xem chi tiết";
+        }
+
+        function handleWordClick(word) {
+            // Luôn thêm từ vào danh sách nếu chưa có
             const existing = vocabList.find(item => item.word === word);
             if (!existing) {
                 vocabList.push({ word, meaning: "Đang tra cứu..." });
                 saveVocabToHistory();
                 displayVocabList();
             }
+            
+            // Sau đó gọi lookupWord như bình thường
+            lookupWord(word);
+        }
 
-            if (instantLookupEnabled) {
-                const naverUrl = `https://korean.dict.naver.com/kovidict/#/search?query=${encodeURIComponent(word)}`;
-                window.open(naverUrl, "_blank");
-                fetchGoogleTranslate(word);
+        function lookupWord(word) {
+            // Luôn thêm từ vào danh sách từ vựng nếu chưa có
+            const existingVocab = vocabList.find(item => item.word === word);
+            if (!existingVocab) {
+                vocabList.push({ word, meaning: "Đang tra cứu..." });
+                saveVocabToHistory();
+                displayVocabList();
             }
+
+            // Tìm trong NotebookLM
+            const notebookVocab = getNotebookVocabInfo(word);
+            
+            if (vocabDisplayMode) {
+                displayVocabInfo(word, existingVocab || vocabList.find(item => item.word === word), notebookVocab);
+            } else if (instantLookupEnabled) {
+                openNaverDict(word);
+                if (!existingVocab) {
+                    fetchGoogleTranslate(word);
+                }
+            } else {
+                // Khi cả hai chế độ đều tắt, vẫn hiển thị thông tin cơ bản
+                displayVocabInfo(word, existingVocab || vocabList.find(item => item.word === word), notebookVocab);
+            }
+        }
+
+        function getNotebookVocabInfo(word) {
+            const notebookText = document.getElementById("notebooklm-vocab").value;
+            if (!notebookText.trim()) return null;
+            
+            const lines = notebookText.split('\n');
+            for (const line of lines) {
+                if (line.includes(word)) {
+                    const [korean, ...meaningParts] = line.split(':');
+                    return {
+                        korean: korean.trim(),
+                        meaning: meaningParts.join(':').trim()
+                    };
+                }
+            }
+            return null;
+        }
+
+        function displayVocabInfo(word, existingVocab, notebookVocab) {
+            const container = document.getElementById("vocab-info-display");
+            let html = `<div class="vocab-info-item">`;
+            
+            html += `<div><span class="vocab-info-korean">${word}</span>`;
+            
+            if (existingVocab?.meaning) {
+                html += `<span class="vocab-info-meaning">${existingVocab.meaning}</span>`;
+            }
+            html += `</div>`;
+            
+            if (notebookVocab?.meaning && (!existingVocab || notebookVocab.meaning !== existingVocab.meaning)) {
+                html += `<div class="vocab-info-notebook">📔 NotebookLM: ${notebookVocab.meaning}</div>`;
+            }
+            
+            const appearances = findWordAppearances(word);
+            if (appearances.length > 0) {
+                html += `<div style="margin-top:10px;font-size:0.9em;color:#555;">`;
+                html += `<div>🕒 Xuất hiện trong video:</div>`;
+                appearances.forEach((time, idx) => {
+                    html += `<div style="margin-top:4px;">
+                        <span class="vocab-info-time">${formatTime(time.startTime)}</span>
+                        <button onclick="jumpToSubtitle(${time.subtitleIndex})">Xem</button>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function findWordAppearances(word) {
+            const result = [];
+            const cleanWord = word.replace(/[^\p{Script=Hangul}]+/gu, "").trim();
+            if (!cleanWord || !subtitleData.length) return result;
+            
+            subtitleData.forEach((sub, idx) => {
+                if (sub.koreanText.includes(cleanWord)) {
+                    result.push({
+                        startTime: sub.startTime,
+                        subtitleIndex: idx
+                    });
+                }
+            });
+            
+            return result;
         }
 
         function formatTime(seconds) {
@@ -948,11 +1074,14 @@
                 const sub = subtitleData[i];
                 const highlightedKoreanText = sub.koreanText.split(/\s+/).map(word => {
                     const cleanWord = word.replace(/[^\p{Script=Hangul}]+/gu, "").trim();
-                    const isLearned = notebookVocab.some(v => v.includes(cleanWord) || cleanWord.includes(v));
-                    if (isLearned) {
-                        return `<span class="korean-word learned" onclick="lookupWord('${cleanWord}')">${word}</span>`;
+                    const isNotebookVocab = notebookVocab.some(v => v.includes(cleanWord) || cleanWord.includes(v));
+                    
+                    if (isNotebookVocab) {
+                        return `<span class="korean-word learned" onclick="handleWordClick('${cleanWord}')" 
+                                style="font-weight:bold;background-color:#e3f2fd;padding:2px 4px;border-radius:3px;border-bottom:2px solid #2196F3;">
+                                ${word}</span>`;
                     }
-                    return `<span class="korean-word" onclick="lookupWord('${cleanWord}')">${word}</span>`;
+                    return `<span class="korean-word" onclick="handleWordClick('${cleanWord}')">${word}</span>`;
                 }).join(" ");
                 const isCurrent = i === index ? "current" : "";
                 subtitleContent += `<div class="subtitle-line ${isCurrent}"> ${formatTime(sub.startTime)}: ${highlightedKoreanText} <span class="vietnamese">${sub.vietnameseText}</span> </div>`;
@@ -1004,28 +1133,36 @@
             }
         }
 
+        function removeBracketsContent(text) {
+            return text.replace(/\[[^\]]*\]/g, '').trim();
+        }
 
-function removeBracketsContent(text) {
-    // Loại bỏ nội dung trong ngoặc vuông [ ... ]
-    return text.replace(/\[[^\]]*\]/g, '').trim();
-}
+        function readTextDual(text, callback) {
+            const cleanedText = removeBracketsContent(text);
+            const parts = cleanedText.split("-");
+            const koreanPart = parts[0] ? parts[0].trim() : "";
+            const vietnamesePart = parts[1] ? parts[1].trim() : "";
 
-function readTextDual(text, callback) {
-    // Loại bỏ nội dung trong ngoặc vuông trước khi đọc
-    const cleanedText = removeBracketsContent(text);
+            if (koreanPart) {
+                const koUtterance = new SpeechSynthesisUtterance(koreanPart);
+                koUtterance.lang = "ko-KR";
+                koUtterance.rate = ttsSpeed;
+                koUtterance.volume = ttsVolume;
 
-    const parts = cleanedText.split("-");
-    const koreanPart = parts[0] ? parts[0].trim() : "";
-    const vietnamesePart = parts[1] ? parts[1].trim() : "";
-
-    if (koreanPart) {
-        const koUtterance = new SpeechSynthesisUtterance(koreanPart);
-        koUtterance.lang = "ko-KR";
-        koUtterance.rate = ttsSpeed;
-        koUtterance.volume = ttsVolume;
-
-        koUtterance.onend = () => {
-            if (vietnamesePart) {
+                koUtterance.onend = () => {
+                    if (vietnamesePart) {
+                        const viUtterance = new SpeechSynthesisUtterance(vietnamesePart);
+                        viUtterance.lang = "vi-VN";
+                        viUtterance.rate = ttsSpeed;
+                        viUtterance.volume = ttsVolume;
+                        viUtterance.onend = callback;
+                        speechSynthesis.speak(viUtterance);
+                    } else if (callback) {
+                        callback();
+                    }
+                };
+                speechSynthesis.speak(koUtterance);
+            } else if (vietnamesePart) {
                 const viUtterance = new SpeechSynthesisUtterance(vietnamesePart);
                 viUtterance.lang = "vi-VN";
                 viUtterance.rate = ttsSpeed;
@@ -1035,20 +1172,7 @@ function readTextDual(text, callback) {
             } else if (callback) {
                 callback();
             }
-        };
-        speechSynthesis.speak(koUtterance);
-    } else if (vietnamesePart) {
-        const viUtterance = new SpeechSynthesisUtterance(vietnamesePart);
-        viUtterance.lang = "vi-VN";
-        viUtterance.rate = ttsSpeed;
-        viUtterance.volume = ttsVolume;
-        viUtterance.onend = callback;
-        speechSynthesis.speak(viUtterance);
-    } else if (callback) {
-        callback();
-    }
-}
-
+        }
 
         function stopReading() {
             if (typeof speechSynthesis !== "undefined") {
@@ -1281,9 +1405,7 @@ function readTextDual(text, callback) {
                 instantLookupEnabled: instantLookupEnabled,
                 naverLookupEnabled: naverLookupEnabled,
                 subtitleOffset: subtitleOffset,
-                vocabWarningEnabled: vocabWarningEnabled,
-                vocabWarningTime: vocabWarningTime,
-                autoPauseEnabled: autoPauseEnabled
+                vocabDisplayMode: vocabDisplayMode
             };
             const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1313,9 +1435,7 @@ function readTextDual(text, callback) {
                     instantLookupEnabled = state.instantLookupEnabled ?? true;
                     naverLookupEnabled = state.naverLookupEnabled ?? false;
                     subtitleOffset = state.subtitleOffset ?? 0;
-                    vocabWarningEnabled = state.vocabWarningEnabled ?? false;
-                    vocabWarningTime = state.vocabWarningTime ?? 5;
-                    autoPauseEnabled = state.autoPauseEnabled ?? false;
+                    vocabDisplayMode = state.vocabDisplayMode ?? false;
 
                     localStorage.setItem("videoHistory", JSON.stringify(history));
                     localStorage.setItem("ttsSpeed", ttsSpeed);
@@ -1324,9 +1444,7 @@ function readTextDual(text, callback) {
                     localStorage.setItem("instantLookup", instantLookupEnabled ? "1" : "0");
                     localStorage.setItem("naverLookup", naverLookupEnabled ? "1" : "0");
                     localStorage.setItem("subtitleOffset", subtitleOffset);
-                    localStorage.setItem("vocabWarningEnabled", vocabWarningEnabled ? "true" : "false");
-                    localStorage.setItem("vocabWarningTime", vocabWarningTime);
-                    localStorage.setItem("autoPauseEnabled", autoPauseEnabled ? "true" : "false");
+                    localStorage.setItem("vocabDisplayMode", vocabDisplayMode);
 
                     document.getElementById("tts-speed").value = ttsSpeed;
                     document.getElementById("speed-value").textContent = ttsSpeed;
@@ -1338,8 +1456,7 @@ function readTextDual(text, callback) {
                     document.getElementById("naver-lookup-toggle").checked = naverLookupEnabled;
                     document.getElementById("subtitle-offset").value = subtitleOffset;
                     document.getElementById("offset-value").textContent = subtitleOffset.toFixed(1);
-                    document.getElementById("vocab-warning-time").value = vocabWarningTime;
-                    document.getElementById("auto-pause-button").textContent = `Tạm dừng tự động (${autoPauseEnabled ? "Bật" : "Tắt"})`;
+                    document.getElementById("vocab-display-mode").checked = vocabDisplayMode;
 
                     displayHistory();
                     alert("Đã tải trạng thái thành công!");
@@ -1350,130 +1467,101 @@ function readTextDual(text, callback) {
             };
             reader.readAsText(fileInput);
         }
-        
-        function toggleVocabWarning() {
-            vocabWarningEnabled = !vocabWarningEnabled;
-            localStorage.setItem("vocabWarningEnabled", vocabWarningEnabled);
 
-            if (vocabWarningEnabled) {
-                document.getElementById("vocab-warning-time").addEventListener('change', function() {
-                    vocabWarningTime = parseInt(this.value) || 5;
-                    localStorage.setItem("vocabWarningTime", vocabWarningTime);
-                });
-                vocabWarningTime = parseInt(document.getElementById("vocab-warning-time").value) || 5;
-                startUpcomingVocabCheck();
-                alert("Đã bật cảnh báo từ vựng sắp xuất hiện (" + vocabWarningTime + " giây)");
-            } else {
-                stopUpcomingVocabCheck();
-                document.getElementById("upcoming-vocab-display").innerHTML = "";
-                alert("Đã tắt cảnh báo từ vựng sắp xuất hiện");
-            }
-        }
-        
-        function toggleAutoPause() {
-            autoPauseEnabled = !autoPauseEnabled;
-            const button = document.getElementById("auto-pause-button");
-            button.textContent = `Tạm dừng tự động (${autoPauseEnabled ? "Bật" : "Tắt"})`;
-            localStorage.setItem("autoPauseEnabled", autoPauseEnabled);
-            if (!autoPauseEnabled) {
-                if (youtubePlayer && youtubePlayer.getPlayerState() === YT.PlayerState.PAUSED) {
-                    youtubePlayer.playVideo();
-                }
+        function toggleVocabTTSMode() {
+            vocabTTSMode = !vocabTTSMode;
+            const button = document.getElementById("vocab-tts-toggle");
+            button.textContent = `Chế độ đọc từ vựng (${vocabTTSMode ? "Bật" : "Tắt"})`;
+            
+            const startBtn = document.getElementById("start-vocab-tts");
+            const pauseBtn = document.getElementById("pause-vocab-tts");
+            const stopBtn = document.getElementById("stop-vocab-tts");
+            
+            startBtn.disabled = !vocabTTSMode;
+            pauseBtn.disabled = !vocabTTSMode;
+            stopBtn.disabled = !vocabTTSMode;
+            
+            if (!vocabTTSMode) {
+                stopVocabTTS();
             }
         }
 
-        function startUpcomingVocabCheck() {
-            if (upcomingVocabCheckInterval) clearInterval(upcomingVocabCheckInterval);
-            upcomingVocabCheckInterval = setInterval(checkUpcomingVocab, 500);
-        }
+        function startVocabTTS() {
+            if (!vocabTTSMode) return;
 
-        function stopUpcomingVocabCheck() {
-            if (upcomingVocabCheckInterval) clearInterval(upcomingVocabCheckInterval);
-            upcomingVocabCheckInterval = null;
-        }
-
-        function checkUpcomingVocab() {
-            if (!vocabWarningEnabled || !youtubePlayer || !subtitleData.length) return;
-            
-            const currentTime = youtubePlayer.getCurrentTime();
-            const warningTime = currentTime + vocabWarningTime;
-            
-            const notebookVocab = document.getElementById("notebooklm-vocab").value
-                .split("\n")
-                .filter(line => line.trim())
-                .map(line => {
-                    const parts = line.split(":");
-                    return {
-                        korean: parts[0]?.trim() || "",
-                        meaning: parts.slice(1).join(":").trim() || ""
-                    };
-                })
-                .filter(item => item.korean);
-            
-            let currentUpcomingVocab = [];
-            
-            for (let i = 0; i < subtitleData.length; i++) {
-                const sub = subtitleData[i];
-                if (sub.startTime > currentTime && sub.startTime <= warningTime) {
-                    const wordsInSubtitle = sub.koreanText.split(/\s+/);
-                    
-                    wordsInSubtitle.forEach(word => {
-                        const cleanWord = word.replace(/[^\p{Script=Hangul}]+/gu, "").trim();
-                        if (cleanWord.length < 2) return;
-                        
-                        const vocabMatch = notebookVocab.find(v => 
-                            v.korean.includes(cleanWord) || cleanWord.includes(v.korean)
-                        );
-                        
-                        if (vocabMatch && !currentUpcomingVocab.some(v => v.korean === vocabMatch.korean)) {
-                            currentUpcomingVocab.push({
-                                korean: vocabMatch.korean,
-                                meaning: vocabMatch.meaning,
-                                appearTime: sub.startTime,
-                                subtitleIndex: i
-                            });
-
-                            if (autoPauseEnabled) {
-                                const pauseTime = sub.startTime - 1;
-                                if (currentTime >= pauseTime && youtubePlayer.getPlayerState() === YT.PlayerState.PLAYING) {
-                                    youtubePlayer.pauseVideo();
-                                }
-                            }
-                        }
-                    });
-                }
-            }
-            
-            if (JSON.stringify(currentUpcomingVocab) !== JSON.stringify(lastUpcomingVocab)) {
-                displayUpcomingVocab(currentUpcomingVocab);
-                lastUpcomingVocab = currentUpcomingVocab;
-            }
-        }
-
-        function displayUpcomingVocab(vocabList) {
-            const container = document.getElementById("upcoming-vocab-display");
-            container.innerHTML = "";
-            
-            if (vocabList.length === 0) {
-                container.innerHTML = "<p>Không có từ vựng nào sắp xuất hiện trong " + vocabWarningTime + " giây tới</p>";
+            const container = document.getElementById("linked-vocab-list");
+            const items = Array.from(container.querySelectorAll(".clickable-vocab"));
+            if (items.length === 0) {
+                alert("Không có từ vựng để đọc! Hãy nhấn 'Liên kết từ vựng với phụ đề' trước.");
                 return;
             }
-            
-            vocabList.sort((a, b) => a.appearTime - b.appearTime);
-            
-            vocabList.forEach(item => {
-                const vocabDiv = document.createElement("div");
-                vocabDiv.className = "upcoming-vocab-item";
-                vocabDiv.innerHTML = `
-                    <div>
-                        <span class="upcoming-vocab-korean">${item.korean}</span>
-                        <span class="upcoming-vocab-meaning">${item.meaning}</span>
-                        <span class="upcoming-vocab-time">(xuất hiện sau ${(item.appearTime - youtubePlayer.getCurrentTime()).toFixed(1)}s)</span>
-                    </div>
-                    <button onclick="jumpToSubtitle(${item.subtitleIndex})">Xem</button>
-                `;
-                container.appendChild(vocabDiv);
+
+            const vocabItems = items.map(div => {
+                const parts = div.textContent.split("-");
+                return {
+                    korean: parts[0]?.trim() || "",
+                    vietnamese: parts.slice(1).join("-").trim() || ""
+                };
+            }).filter(item => item.korean);
+
+            if (vocabItems.length === 0) {
+                alert("Không tìm thấy từ vựng hợp lệ!");
+                return;
+            }
+
+            isVocabTTSPaused = false;
+            vocabTTSIndex = pausedVocabIndex >= 0 ? pausedVocabIndex : 0;
+            pausedVocabIndex = -1;
+            readVocabItem(vocabItems);
+        }
+
+        function readVocabItem(vocabItems) {
+            if (vocabTTSIndex >= vocabItems.length || isVocabTTSPaused) return;
+            const item = vocabItems[vocabTTSIndex];
+            highlightCurrentVocabItem(vocabTTSIndex);
+
+            const textToRead = `${item.korean} - ${item.vietnamese}`;
+            readTextDual(textToRead, () => {
+                vocabTTSIndex++;
+                if (vocabTTSIndex < vocabItems.length && !isVocabTTSPaused) {
+                    vocabTTSTimeout = setTimeout(() => readVocabItem(vocabItems), 500);
+                }
             });
+        }
+
+        function highlightCurrentVocabItem(index) {
+            const container = document.getElementById("linked-vocab-list");
+            const items = container.querySelectorAll(".clickable-vocab");
+            items.forEach((item, i) => {
+                item.style.backgroundColor = i === index ? "#d0e8ff" : "";
+            });
+        }
+
+        function pauseVocabTTS() {
+            if (!vocabTTSMode || vocabTTSIndex === -1) return;
+            isVocabTTSPaused = !isVocabTTSPaused;
+            document.getElementById("pause-vocab-tts").textContent = 
+                isVocabTTSPaused ? "Tiếp tục" : "Tạm dừng";
+            if (isVocabTTSPaused) {
+                pausedVocabIndex = vocabTTSIndex;
+                speechSynthesis.cancel();
+                clearTimeout(vocabTTSTimeout);
+            } else {
+                startVocabTTS();
+            }
+        }
+
+        function stopVocabTTS() {
+            isVocabTTSPaused = false;
+            vocabTTSIndex = -1;
+            pausedVocabIndex = -1;
+            speechSynthesis.cancel();
+            clearTimeout(vocabTTSTimeout);
+            highlightCurrentVocabItem(-1);
+        }
+
+        function testTTS() {
+            readText("Kiểm tra giọng đọc", () => {});
         }
 
         function loadInitialState() {
@@ -1485,9 +1573,7 @@ function readTextDual(text, callback) {
                 instantLookupEnabled = localStorage.getItem("instantLookup") !== "0";
                 naverLookupEnabled = localStorage.getItem("naverLookup") === "1";
                 subtitleOffset = parseFloat(localStorage.getItem("subtitleOffset")) || 0;
-                vocabWarningEnabled = localStorage.getItem("vocabWarningEnabled") === "true";
-                vocabWarningTime = parseInt(localStorage.getItem("vocabWarningTime")) || 5;
-                autoPauseEnabled = localStorage.getItem("autoPauseEnabled") === "true";
+                vocabDisplayMode = localStorage.getItem("vocabDisplayMode") === "true";
 
                 document.getElementById("tts-speed").value = ttsSpeed;
                 document.getElementById("speed-value").textContent = ttsSpeed;
@@ -1499,123 +1585,15 @@ function readTextDual(text, callback) {
                 document.getElementById("naver-lookup-toggle").checked = naverLookupEnabled;
                 document.getElementById("subtitle-offset").value = subtitleOffset;
                 document.getElementById("offset-value").textContent = subtitleOffset.toFixed(1);
-                document.getElementById("vocab-warning-time").value = vocabWarningTime;
-                document.getElementById("auto-pause-button").textContent = `Tạm dừng tự động (${autoPauseEnabled ? "Bật" : "Tắt"})`;
+                document.getElementById("vocab-display-mode").checked = vocabDisplayMode;
 
                 displayHistory();
-
-                if (vocabWarningEnabled) {
-                    toggleVocabWarning();
-                }
             } catch (e) {
-                console.error("Lỗi khi tải trạng thái ban đầu:", e);
+                console.error("Lỗi khi tải trạng thái:", e);
             }
         }
 
-        
-let vocabTTSMode = false; 
-let vocabTTSIndex = -1;
-let vocabTTSTimeout;
-let isVocabTTSPaused = false;
-let pausedVocabIndex = -1;
-
-function toggleVocabTTSMode() {
-    vocabTTSMode = !vocabTTSMode;
-    const button = document.getElementById("vocab-tts-toggle");
-    button.textContent = `Chế độ đọc từ vựng (${vocabTTSMode ? "Bật" : "Tắt"})`;
-    
-    const startBtn = document.getElementById("start-vocab-tts");
-    const pauseBtn = document.getElementById("pause-vocab-tts");
-    const stopBtn = document.getElementById("stop-vocab-tts");
-    
-    startBtn.disabled = !vocabTTSMode;
-    pauseBtn.disabled = !vocabTTSMode;
-    stopBtn.disabled = !vocabTTSMode;
-    
-    if (!vocabTTSMode) {
-        stopVocabTTS();
-    }
-}
-
-
-function startVocabTTS() {
-    if (!vocabTTSMode) return;
-
-    const container = document.getElementById("linked-vocab-list");
-    const items = Array.from(container.querySelectorAll(".clickable-vocab"));
-    if (items.length === 0) {
-        alert("Không có từ vựng để đọc! Hãy nhấn 'Liên kết từ vựng với phụ đề' trước.");
-        return;
-    }
-
-    const vocabItems = items.map(div => {
-        const parts = div.textContent.split("-");
-        return {
-            korean: parts[0]?.trim() || "",
-            vietnamese: parts.slice(1).join("-").trim() || ""
-        };
-    }).filter(item => item.korean);
-
-    if (vocabItems.length === 0) {
-        alert("Không tìm thấy từ vựng hợp lệ!");
-        return;
-    }
-
-    isVocabTTSPaused = false;
-    vocabTTSIndex = pausedVocabIndex >= 0 ? pausedVocabIndex : 0;
-    pausedVocabIndex = -1;
-    readVocabItem(vocabItems);
-}
-
-
-
-function readVocabItem(vocabItems) {
-    if (vocabTTSIndex >= vocabItems.length || isVocabTTSPaused) return;
-    const item = vocabItems[vocabTTSIndex];
-    highlightCurrentVocabItem(vocabTTSIndex);
-
-    const textToRead = `${item.korean} - ${item.vietnamese}`;
-    readTextDual(textToRead, () => {
-        vocabTTSIndex++;
-        if (vocabTTSIndex < vocabItems.length && !isVocabTTSPaused) {
-            vocabTTSTimeout = setTimeout(() => readVocabItem(vocabItems), 500);
-        }
-    });
-}
-
-
-function highlightCurrentVocabItem(index) {
-    const container = document.getElementById("linked-vocab-list");
-    const items = container.querySelectorAll(".clickable-vocab");
-    items.forEach((item, i) => {
-        item.style.backgroundColor = i === index ? "#d0e8ff" : "";
-    });
-}
-
-function pauseVocabTTS() {
-    if (!vocabTTSMode || vocabTTSIndex === -1) return;
-    isVocabTTSPaused = !isVocabTTSPaused;
-    document.getElementById("pause-vocab-tts").textContent = 
-        isVocabTTSPaused ? "Tiếp tục" : "Tạm dừng";
-    if (isVocabTTSPaused) {
-        pausedVocabIndex = vocabTTSIndex;
-        speechSynthesis.cancel();
-        clearTimeout(vocabTTSTimeout);
-    } else {
-        startVocabTTS();
-    }
-}
-
-function stopVocabTTS() {
-    isVocabTTSPaused = false;
-    vocabTTSIndex = -1;
-    pausedVocabIndex = -1;
-    speechSynthesis.cancel();
-    clearTimeout(vocabTTSTimeout);
-    highlightCurrentVocabItem(-1);
-}
-
-window.onload = loadInitialState;
+        window.onload = loadInitialState;
     </script>
 </body>
-</html>
+    </html>
