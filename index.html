@@ -369,7 +369,27 @@
     <h3>Danh sách từ vựng đã tra</h3>
     <h3>Danh sách từ NotebookLM</h3>
     <textarea id="notebooklm-vocab" rows="10" placeholder="Dán danh sách từ ở đây..."></textarea>
-    <button onclick="linkVocabToSubtitles()">Liên kết từ vựng với phụ đề</button>
+    
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 5px;">
+                        <input type="text" id="chars-to-remove" placeholder="Nhập ký tự cần xóa (ví dụ: *>)">
+                        <button onclick="removeCharacters()">Xóa ký tự</button>
+                    </div>
+                    <button onclick="linkVocabToSubtitles()">Liên kết từ vựng với phụ đề</button>
+                    <script>
+                        function removeCharacters() {
+                            const textArea = document.getElementById("notebooklm-vocab");
+                            const charsToRemove = document.getElementById("chars-to-remove").value;
+                            if (textArea && charsToRemove) {
+                                let content = textArea.value;
+                                for (let i = 0; i < charsToRemove.length; i++) {
+                                    const char = charsToRemove[i];
+                                    content = content.split(char).join("");
+                                }
+                                textArea.value = content;
+                            }
+                        }
+                    </script>
+                
     <div id="linked-vocab-list"></div>
     <div style="margin-top: 10px;">
         <button id="vocab-tts-toggle" onclick="toggleVocabTTSMode()">Chế độ đọc từ vựng (Tắt)</button>
