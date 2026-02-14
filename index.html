@@ -283,7 +283,7 @@
         <input type="text" id="video-url" placeholder="Nhập link YouTube (ví dụ: https://www.youtube.com/watch?v=dQw4w9WgXcQ)">
         <button onclick="loadVideo()">Tải Video</button>
         <div id="subtitle-link-container" style="display:none;">
-            <a id="subtitle-link" target="_blank">Tải phụ đề từ subtitle.to</a>
+            <a id="subtitle-link" target="_blank">Tải phụ đề từ getsubs.cc</a>
         </div>
         <br>
         <input type="file" id="subtitle-file" accept=".srt">
@@ -567,8 +567,8 @@
             iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
             const subtitleLinkContainer = document.getElementById("subtitle-link-container");
             const subtitleLink = document.getElementById("subtitle-link");
-            subtitleLink.href = `https://subtitle.to/${urlInput}`;
-            subtitleLink.textContent = `Tải phụ đề từ subtitle.to cho video này`;
+            subtitleLink.href = `https://getsubs.cc/${urlInput}`;
+            subtitleLink.textContent = `Tải phụ đề từ getsubs.cc cho video này`;
             subtitleLinkContainer.style.display = "block";
             initializePlayer();
             const historyItem = history.find(item => item.videoUrl === urlInput);
@@ -583,7 +583,7 @@
         }
 
         async function loadAutoSubtitles() {
-            alert("Đang thử tải phụ đề tự động từ subtitle.to...");
+            alert("Đang thử tải phụ đề tự động từ getsubs.cc...");
             try {
                 const response = await new Promise(resolve => {
                     setTimeout(() => resolve({ text: `1\n00:00:01,000 --> 00:00:03,000\n안녕하세요\nXin chào\n\n2\n00:00:03,001 --> 00:00:05,000\n만나서 반갑습니다\nRất vui được gặp bạn` }), 1000);
@@ -1011,21 +1011,8 @@
             currentSubtitleIndex = index - 1;
             youtubePlayer.seekTo(subtitleData[index].startTime, true);
             youtubePlayer.playVideo();
-            
             highlightSubtitle(index);
-
-            // === AUTO SCROLL ACTIVE SUBTITLE ===
-            setTimeout(() => {
-                const activeItem = document.querySelector('.subtitle-item.active');
-                if (activeItem) {
-                    activeItem.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }
-            }, 50);
         }
-
 
         function highlightSubtitle(index) {
             const items = document.getElementsByClassName("subtitle-item");
@@ -1120,21 +1107,8 @@
                 subtitleContent += `<div class="subtitle-line ${isCurrent}"> ${formatTime(sub.startTime)}: ${highlightedKoreanText} <span class="vietnamese">${sub.vietnameseText}</span> </div>`;
             }
             document.getElementById("subtitle-display").innerHTML = subtitleContent;
-            
             highlightSubtitle(index);
-
-            // === AUTO SCROLL ACTIVE SUBTITLE ===
-            setTimeout(() => {
-                const activeItem = document.querySelector('.subtitle-item.active');
-                if (activeItem) {
-                    activeItem.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }
-            }, 50);
         }
-
 
         function readText(text, callback) {
             if (!text) {
@@ -1642,4 +1616,4 @@
         window.onload = loadInitialState;
     </script>
 </body>
-        </html>
+            </html>
