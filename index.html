@@ -1011,8 +1011,21 @@
             currentSubtitleIndex = index - 1;
             youtubePlayer.seekTo(subtitleData[index].startTime, true);
             youtubePlayer.playVideo();
+            
             highlightSubtitle(index);
+
+            // === AUTO SCROLL ACTIVE SUBTITLE ===
+            setTimeout(() => {
+                const activeItem = document.querySelector('.subtitle-item.active');
+                if (activeItem) {
+                    activeItem.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                }
+            }, 50);
         }
+
 
         function highlightSubtitle(index) {
             const items = document.getElementsByClassName("subtitle-item");
@@ -1107,8 +1120,21 @@
                 subtitleContent += `<div class="subtitle-line ${isCurrent}"> ${formatTime(sub.startTime)}: ${highlightedKoreanText} <span class="vietnamese">${sub.vietnameseText}</span> </div>`;
             }
             document.getElementById("subtitle-display").innerHTML = subtitleContent;
+            
             highlightSubtitle(index);
+
+            // === AUTO SCROLL ACTIVE SUBTITLE ===
+            setTimeout(() => {
+                const activeItem = document.querySelector('.subtitle-item.active');
+                if (activeItem) {
+                    activeItem.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                }
+            }, 50);
         }
+
 
         function readText(text, callback) {
             if (!text) {
@@ -1616,4 +1642,4 @@
         window.onload = loadInitialState;
     </script>
 </body>
-    </html>
+        </html>
